@@ -1,0 +1,71 @@
+#coding=utf-8
+
+import sys,os
+import paramiko
+import time
+
+Script_Dir = sys.path[0]
+
+devlist = open('%s\\devlist.txt' % Script_Dir, 'r+')
+commands = open('%s\\commands.txt' % Script_Dir, 'r+')
+
+
+
+for dev in devlist.readlines():
+    if dev.startswith('#'):
+        continue
+    host = dev.split(':')
+    ipaddr = host[0]
+    user = host[1]
+    passwd = host[2]
+    #device_model = host[3].lower().strip()
+    en_passwd = host[3].strip()
+    #print ipaddr
+    #print user
+    #print passwd
+    #print en_passwd
+    buff = ' '
+    resp = ' '
+    if os.path.exists('%s\\sessionlog' % Script_Dir) == False:
+        os.mkdir('%s\\sessionlog' % Script_Dir)
+
+    ssh = paramiko.SSHClient()                                     #create ssh client
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(hostname=ipaddr,username=user,password=passwd)    #call ssh client conncet function
+
+
+    channel = ssh.invoke_shell(term='vt100',width=60,height=800,width_pixels=0,height_pixels=0)  #from ssh client create channel
+    channel.settimeout(30)
+    channel.send("enable\n")
+
+    channel.send(en_passwd+'\n')
+    for cmd in commands.readlines():
+        buff = ''
+        resp = ''
+        if cmd.startswith('#'):
+            continue
+        else:
+            cmd = cmd.strip()
+        
+        channel.send(cmd+'\n')
+        while not buff.endswith('#'):          #输出串尾为'#'时说明命令执行完毕输出完成
+            try:
+                resp = channel.recv(20000)
+            except Exception, e:
+                print 'Error info:%s connection error.' % (str(e))
+                channel.close()
+                ssh.close()
+                sys.exit()
+            buff += resp
+
+   
+        result = open("%s\\sessionlog\\%s_%s.txt" % (Script_Dir,host[0],cmd),'w+')
+        result.writelines(buff)
+        result.flush()
+    channel.close()
+    result.close()
+    ssh.close()
+
+
+devlist.close()
+commands.close()
